@@ -1,135 +1,164 @@
 grammar PyGrammarOne;
 
-// Using java language with antlr's compatibility to implement stack fuctions to get the indention right for statements
-// where indention and dedention is needed. Create tokens for easy use in the grammar.
+tokens { INDENT, DEDENT }
+
+// Library that helps with Indents and Dedents
+@lexer::header{
+from antlr_denter.DenterHelper import DenterHelper
+from MyCoolParser import MyCoolParser
+}
 @lexer::members {
+class MyCoolDenter(DenterHelper):
+    def __init__(self, lexer, nl_token, indent_token, dedent_token, ignore_eof):
+        super().__init__(nl_token, indent_token, dedent_token, ignore_eof)
+        self.lexer: MyCoolLexer = lexer
 
-    // Make a stack to keep track of the level of indents
-    java.util.Stack<Integer> indStack = new java.util.Stack<>();
-    {
-        indStack.push(0);
-    }
+    def pull_token(self):
+        return super(MyCoolLexer, self.lexer).nextToken()
 
-    // Create a queue to hold our pending indent and/or dedent tokens so they are ready for use
-    // Used for when the indentation changes
-    java.util.LinkedList<Token> tokens = new java.util.LinkedList<>();
-    int currentInd = 0;
+denter = None
 
-    // Use Override to create our own logic specific to our use for these tokens.
-    @Override
-    public Token nextToken(){
-        if(!tokens.isEmpty()){
-            return tokens.poll();
-        }
-        Token next = super.nextToken();
-        if(next.getType() == NEWLINE){
-            processInd(next);
-        }
-        return tokens.isEmpty() ? next : tokens.poll();
-    }
+def nextToken(self):
+    if not self.denter:
+        self.denter = self.MyCoolDenter(self, self.NL, MyCoolParser.INDENT, MyCoolParser.DEDENT, ***Should Ignore EOF***)
+    return self.denter.next_token()
 
-    // When the program reaches the NEWLINE token I have created, this method
-    // processes the indentation changes needed.
-    private void processInd(Token newlineToken){
-        String spaces = getText();
-        int ind = spaces.length();
-        // Creates indent
-        if (ind > currentInd){
-            indStack.push(ind);
-            tokens.add(createToken(INDENT, newlineToken));
-        }
-        // Creates dedent
-        else if(ind < currentInd){
-            while(!indStack.isEmpty() && ind < indStack.peek()){
-                indStack.pop();
-                tokens.add(createToken(DEDENT, newlineToken));
-            }
-        }
-        currentInd = ind;
-    }
-
-    // Method that creates the token itself
-    privateToken createToken(int type, Token srcToken){
-        CommonToken token = new CommonToken(type, "");
-
-        // Gathers info from the source token on it's position
-        token.setLine(srceToken.getLine());
-        token.setCharPositionInLine(srcToken.getCharPositionInLine());
-        token.setStartIndex(srcToken.getStartIndex());
-        token.setStopIndex(srcToken.getStopIndex());
-
-        // Returns the new token we created
-        return token;
-    }
 }
 
-// The 'templates' used for the rest of the grammar
-prog: (exp NEWLINE?)* NEWLINE? EOF;
+// Lexer Rules
+NEWLINE: ('\r'? '\n' ' '*);
+WS: [ \t]+ -> skip; // Skip spaces and tabs
 
-exp: assign | arith | types | statements;
+COMMENT: '#' ~[\r\n]* -> skip;
+MULTILINE_COMMENT: SQ SQ SQ.*? SQ SQ SQ -> skip;
 
-types: SUB? INT | SUB? FLOAT | STRING | array | VARNAME;
-
-// Assign and Arithmetic Definitions
-assign: VARNAME (ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN) exp;
-
-arith: types ((ADD | SUB | MUL | DIV | MOD) types)*;
-
-// Comparison and Logical Definitions
-cond: exp ((LT | GT | LTE | GTE | EE | NE) exp)*;
-
-logi: NOT? cond ((AND | OR) cond)* | LPAR logi RPAR (AND|OR)?| cond;
-
-array: '[' (types (',' types)*)? ']';
-
-// Arithmetic and Assignment Operators
-ASSIGN: '=';
-ADD_ASSIGN: '+=';
-SUB_ASSIGN: '-=';
-MUL_ASSIGN: '*=';
-DIV_ASSIGN: '/=';
-MOD_ASSIGN: '%=';
-ADD: '+';
-SUB: '-';
-MUL: '*';
-DIV: '/';
-MOD: '%';
-LPAR: '(';
-RPAR: ')';
-COLON: ':';
-
-// Comparison and Logical Operators
-LT: '<';
-GT: '>';
-LTE: '<=';
-GTE: '>=';
-EE: '==';
-NE: '!=';
-
+// Keywords
+IF: 'if';
+ELIF: 'elif';
+ELSE: 'else';
+WHILE: 'while';
+FOR: 'for';
+IN: 'in';
 AND: 'and';
 OR: 'or';
 NOT: 'not';
 
-// if/elif/else Blocks
-if_state: 'if' (logi)* COLON block INDENT block DEDENT (elif_state)* (else_state)?;
-elif_state: 'elif' (logi)* COLON block  INDENT block DEDENT;
-else_state: 'else' COLON block INDENT block DEDENT;
+// Operators and Punctuation
+COLON: ':';
+LPAREN: '(';
+RPAREN: ')';
+LBRACK: '[';
+RBRACK: ']';
+COMMA: ',';
+SQ: '\'';
+DQ: '"';
+PLUS: '+';
+MINUS: '-';
+MULT: '*';
+DIV: '/';
+MOD: '%';
+EQ: '=';
+PLUSEQ: '+=';
+MINUSEQ: '-=';
+MULTEQ: '*=';
+DIVEQ: '/=';
+EE: '==';
+GT: '>';
+LT: '<';
+GE: '>=';
+LE: '<=';
+NE: '!=';
 
-block: (exp NEWLINE?)+;
-
-statements: (if_state | elif_state | else_state);
-
-// Data Types and Variable Name
-VARNAME: [A-Za-z_][a-zA-Z_0-9]*;
+// Identifiers and Literals
+VARNAME: [a-zA-Z_][a-zA-Z0-9_]*;
 INT: [0-9]+;
-FLOAT: [0-9]+ '.' [0-9]+;
-STRING: '"' .*? '"' | '\'' .*? '\'';
+FLOAT: [0-9]+ '.' [0-9]*;
+STRING: DQ (~["\\])* DQ | SQ (~['\\])* SQ;
 
-// Empty Space
-NEWLINE: '\r'? '\n' -> skip;
-WHITESPACE: [ \t\r\n]+ ->skip;
+// Parser Rules
+program: (stmt NEWLINE*)+ EOF;
 
-// INDENTION RULES
-INDENT: '<INDENT>';
-DEDENT: '<DEDENT>';
-SPACES: [\t]+ -> skip;
+stmt
+    : simple_stmt
+    | compound_stmt
+    ;
+
+simple_stmt
+    : assign_stmt
+    | expr_stmt
+    ;
+
+assign_stmt
+    : VARNAME (EQ | PLUSEQ | MINUSEQ | MULTEQ | DIVEQ) expr
+    ;
+
+expr_stmt
+    : expr
+    ;
+
+expr
+    : term ((PLUS | MINUS) term)*;
+
+term
+    : factor ((MULT | DIV | MOD) factor)*;
+
+factor
+    : atom
+    | LPAREN expr RPAREN;
+
+comparison
+    : expr (GT | LT | GE | LE | EQ | NE | EE) expr;
+
+logical_expr
+    : comparison ((AND | OR) comparison)*
+    | LPAREN NOT? expr* RPAREN
+    | expr
+    ;
+
+atom
+    : VARNAME
+    | INT
+    | MINUS INT
+    | FLOAT
+    | STRING
+    | array
+    ;
+
+array
+    : LBRACK (expr (',' expr)*)? RBRACK
+    ;
+
+compound_stmt
+    : if_stmt
+    | elif_stmt
+    | else_stmt
+    | while_stmt
+    | for_stmt
+    ;
+
+if_stmt
+    : IF logical_expr COLON NEWLINE suite (NEWLINE suite)*
+    ;
+    
+elif_stmt
+    : ELIF logical_expr ((AND|OR) logical_expr)* COLON NEWLINE suite
+    ;
+
+else_stmt
+    : ELSE COLON NEWLINE suite
+    ;
+
+while_stmt
+    : WHILE (LPAREN* logical_expr RPAREN*) COLON NEWLINE suite 
+    (NEWLINE suite)*
+    ;
+
+for_stmt
+    : FOR VARNAME IN expr COLON NEWLINE suite (NEWLINE suite)*
+    | FOR VARNAME IN expr LPAREN INT COMMA INT RPAREN 
+    COLON NEWLINE suite (NEWLINE suite)*
+    ;
+
+suite
+    : stmt+ 
+    ;
